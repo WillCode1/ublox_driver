@@ -41,6 +41,7 @@ UbloxMessageProcessor::UbloxMessageProcessor(ros::NodeHandle& nh) :
     pub_pvt_ = nh_.advertise<GnssPVTSolnMsg>("receiver_pvt", 100);
     pub_lla_ = nh_.advertise<sensor_msgs::NavSatFix>("receiver_lla", 100);
     pub_tp_info_ = nh_.advertise<GnssTimePulseInfoMsg>("time_pulse_info", 100);
+    pub_ls_info_ = nh_.advertise<GnssLeapSecondsInfoMsg>("leap_seconds_info", 100);
     pub_range_meas_ = nh_.advertise<GnssMeasMsg>("range_meas", 100);
     pub_ephem_ = nh_.advertise<GnssEphemMsg>("ephem", 100);
     pub_glo_ephem_ = nh_.advertise<GnssGloEphemMsg>("glo_ephem", 100);
@@ -128,6 +129,16 @@ void UbloxMessageProcessor::process_data(const uint8_t *data, size_t len)
         lla_msg.status.status = static_cast<int8_t>(pvt_soln->fix_type);
         lla_msg.status.service = static_cast<uint16_t>(pvt_soln->carr_soln);
         pub_lla_.publish(lla_msg);
+        return;
+    }
+    else if (msg_type == UBX_NAVTIMELS_ID)
+    {
+        LeapSecondsInfoPtr ls_info = parse_leap_seconds(data, len);
+        if (!ls_info || !ls_info->valid_curr_ls || ls_info->src_Of_curr_ls != 2)
+            return;
+
+        GnssLeapSecondsInfoMsg ls_msg = ls_info2msg(ls_info);
+        pub_ls_info_.publish(ls_msg);
         return;
     }
     // unsupported message reach here
@@ -224,6 +235,27 @@ TimePulseInfoPtr UbloxMessageProcessor::parse_time_pulse(const uint8_t *msg_data
     }
 
     return tp_info;
+}
+
+LeapSecondsInfoPtr UbloxMessageProcessor::parse_leap_seconds(const uint8_t *msg_data, const uint32_t msg_len)
+{
+    LeapSecondsInfoPtr ls_info;
+    if (msg_len != 32)          // header(6) + payload(24) + checksum(2)
+    {
+        LOG(ERROR) << "ubx nav-timels message length error. len=" << msg_len;
+        return ls_info;
+    }
+    ls_info.reset(new LeapSecondsInfo());
+    const uint8_t *p = msg_data + 6;      // skip header
+    uint8_t valid = *reinterpret_cast<const uint8_t*>(p+23);
+    ls_info->valid_curr_ls = static_cast<bool>(valid&0x01);
+    ls_info->valid_time_to_ls_event = static_cast<bool>((valid&0x02)>>1);
+    ls_info->src_Of_curr_ls = *reinterpret_cast<const uint8_t*>(p+8);
+    ls_info->curr_ls = *reinterpret_cast<const int8_t*>(p+9);
+    ls_info->src_of_ls_change = *reinterpret_cast<const uint8_t*>(p+10);
+    ls_info->ls_change = *reinterpret_cast<const int8_t*>(p+11);
+    ls_info->time_to_ls_event = *reinterpret_cast<const int32_t*>(p+12);
+    return ls_info;
 }
 
 PVTSolutionPtr UbloxMessageProcessor::parse_pvt(const uint8_t *msg_data, const uint32_t msg_len)

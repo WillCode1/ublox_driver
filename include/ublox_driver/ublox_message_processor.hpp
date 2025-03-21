@@ -47,6 +47,7 @@ class UbloxMessageProcessor
     private:
         void parse_ion_utc(const uint8_t *data, const size_t header_len);
         TimePulseInfoPtr parse_time_pulse(const uint8_t *msg_data, const uint32_t msg_len);
+        LeapSecondsInfoPtr parse_leap_seconds(const uint8_t *msg_data, const uint32_t msg_len);
         PVTSolutionPtr parse_pvt(const uint8_t *msg_data, const uint32_t msg_len);
 
         std::vector<ObsPtr> parse_meas_msg(const uint8_t *msg_data, const uint32_t msg_len);
@@ -121,6 +122,7 @@ class UbloxMessageProcessor
         uint8_t subfrm[MAX_SAT][380];     /* subframe buffer */
         gtime_t curr_time;
         ros::NodeHandle nh_;
+        ros::Publisher pub_ls_info_;
         ros::Publisher pub_pvt_, pub_lla_;
         ros::Publisher pub_tp_info_;
         ros::Publisher pub_range_meas_, pub_ephem_, pub_glo_ephem_, pub_iono_;
@@ -136,6 +138,7 @@ class UbloxMessageProcessor
         static constexpr uint16_t UBX_NAVPOS_ID = 0x0107;        // ubx message id: Navigation Position Velocity Time Solution
         static constexpr uint16_t UBX_TIM_TP_ID = 0x0D01;        // ubx message id:  information on the timing of the next pulse
         static constexpr uint16_t UBX_UNKNOWN_ID = 0x0000;        // ubx message id:  unknown or unsupported message
+        static constexpr uint16_t UBX_NAVTIMELS_ID = 0x0126;        // ubx message id: Navigation Position Velocity Time Solution
 
         static constexpr uint32_t UBX_PVT_PAYLOAD_LEN = 92;
 
